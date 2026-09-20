@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cycle Ledger (Live) — BTC Top/Bottom Scorecard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#0d1b1e; --paper:#f3efe6; --paper-dim:#e8e2d3; --line:#c9c0a8;
+    --rust:#a8481c; --amber:#c98a2b; --moss:#3f5d3a; --slate:#5a6b6d;
+    --hit-bg:#a8481c; --hit-fg:#f3efe6; --live:#3f5d3a;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --ink:#eee7d6; --paper:#14201f; --paper-dim:#1c2b29; --line:#3a4644;
+      --rust:#e0824a; --amber:#dba63e; --moss:#7fae72; --slate:#93a3a1;
+      --hit-bg:#e0824a; --hit-fg:#14201f; --live:#7fae72;
+    }
+  }
+  *{box-sizing:border-box;}
+  body{ margin:0; background:var(--paper); color:var(--ink); font-family:'Newsreader',Georgia,serif; padding-bottom:60px; }
+  .mono{ font-family:'JetBrains Mono', ui-monospace, monospace; }
+  header{ border-bottom:1px solid var(--line); padding:28px 20px 20px; max-width:920px; margin:0 auto; }
+  .masthead{ display:flex; justify-content:space-between; align-items:baseline; flex-wrap:wrap; gap:8px 20px; }
+  h1{ font-size:clamp(24px,4vw,34px); font-weight:600; margin:0; letter-spacing:-0.01em; }
+  .dateline{ font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--slate); text-transform:uppercase; letter-spacing:.04em; }
+  .strap{ margin-top:8px; font-size:14.5px; color:var(--slate); max-width:65ch; line-height:1.5; }
+  main{ max-width:920px; margin:0 auto; padding:0 20px; }
+  .toolbar{ display:flex; gap:10px; align-items:center; margin:20px 0; flex-wrap:wrap; }
+  .refresh-btn{
+    font-family:'JetBrains Mono',monospace; font-size:12px; text-transform:uppercase; letter-spacing:.04em;
+    background:var(--ink); color:var(--paper); border:none; padding:10px 16px; border-radius:2px; cursor:pointer;
+  }
+  .refresh-btn:disabled{ opacity:.5; cursor:wait; }
+  .fetch-log{ font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--slate); }
+  .composite{ display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:1px; background:var(--line); margin:20px 0; border:1px solid var(--line); }
+  .composite > div{ background:var(--paper); padding:16px 14px; }
+  .composite .num{ font-family:'JetBrains Mono',monospace; font-size:28px; font-weight:700; line-height:1; }
+  .composite .lbl{ font-family:'JetBrains Mono',monospace; font-size:10.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--slate); margin-top:6px; }
+  .composite .read{ color:var(--rust); }
+  .verdict{ font-size:15.5px; line-height:1.55; padding:14px 16px; border-left:3px solid var(--rust); background:var(--paper-dim); margin-bottom:28px; }
+  .category{ margin-bottom:34px; }
+  .cat-head{ display:flex; justify-content:space-between; align-items:baseline; border-bottom:1px solid var(--ink); padding-bottom:6px; margin-bottom:4px; }
+  .cat-head h2{ font-size:18px; font-weight:600; margin:0; }
+  .cat-head .cat-note{ font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--slate); text-transform:uppercase; letter-spacing:.04em; }
+  .cat-desc{ font-size:13px; color:var(--slate); margin:6px 0 14px; max-width:68ch; line-height:1.5; }
+  .row{ display:grid; grid-template-columns: minmax(150px,1.6fr) 26px 90px 90px 66px 1fr; gap:9px; align-items:center; padding:11px 0; border-bottom:1px dashed var(--line); font-size:13.5px; }
+  .row:last-child{ border-bottom:none; }
+  .row .name{ font-weight:500; cursor:pointer; }
+  .row .name .hint{ display:block; font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--slate); font-weight:400; margin-top:2px; }
+  .tag{ font-family:'JetBrains Mono',monospace; font-size:9px; text-transform:uppercase; text-align:center; padding:2px 4px; border-radius:2px; }
+  .tag.auto{ background:var(--live); color:var(--paper); }
+  .tag.manual{ border:1px solid var(--line); color:var(--slate); }
+  .row input{ font-family:'JetBrains Mono',monospace; font-size:12.5px; width:100%; padding:6px 7px; border:1px solid var(--line); background:var(--paper); color:var(--ink); border-radius:2px; }
+  .row input:focus{ outline:2px solid var(--amber); outline-offset:1px; }
+  .row input.auto-filled{ border-color:var(--live); }
+  .status{ font-family:'JetBrains Mono',monospace; font-size:10.5px; text-transform:uppercase; letter-spacing:.03em; text-align:center; padding:4px 6px; border-radius:2px; white-space:nowrap; }
+  .status.hit{ background:var(--hit-bg); color:var(--hit-fg); }
+  .status.warm{ background:var(--amber); color:var(--ink); }
+  .status.cold{ background:transparent; color:var(--slate); border:1px solid var(--line); }
+  .status.err{ background:transparent; color:var(--rust); border:1px solid var(--rust); }
+  .bar-wrap{ height:6px; background:var(--paper-dim); border:1px solid var(--line); border-radius:3px; overflow:hidden; }
+  .bar{ height:100%; background:var(--rust); }
+  .explain{ grid-column:1/-1; font-size:12.5px; color:var(--slate); line-height:1.5; padding:2px 0 6px; display:none; max-width:70ch; }
+  .explain.open{ display:block; }
+  footer{ max-width:920px; margin:30px auto 0; padding:20px; border-top:1px solid var(--line); font-size:12px; color:var(--slate); line-height:1.6; }
+  .reset-btn{ font-family:'JetBrains Mono',monospace; font-size:11px; text-transform:uppercase; letter-spacing:.04em; background:none; border:1px solid var(--line); color:var(--slate); padding:6px 10px; border-radius:2px; cursor:pointer; }
+  .reset-btn:hover{ border-color:var(--rust); color:var(--rust); }
+  .cors-note{ background:var(--paper-dim); border:1px solid var(--line); padding:12px 14px; font-size:12.5px; line-height:1.5; margin-bottom:20px; }
+  @media (max-width:640px){
+    .row{ grid-template-columns:1fr; row-gap:6px; }
+    .row .tag{ order:1; justify-self:start; }
+    .row .name{ order:0; }
+    label.field-label{ display:inline; font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--slate); text-transform:uppercase; margin-right:6px;}
+    .status{ order:5; justify-self:start; }
+    .bar-wrap{ order:6; }
+  }
+  label.field-label{ display:none; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="masthead">
+    <h1>The Cycle Ledger — Live</h1>
+    <span class="dateline mono" id="clock"></span>
+  </div>
+  <p class="strap">Same scorecard, wired to free public APIs where one genuinely exists. Run this file locally (double-click it, or serve it from GitHub Pages / Netlify) — it needs to make outbound requests your browser won't allow from inside Claude's own sandboxed preview.</p>
+</header>
+
+<main>
+
+  <div class="cors-note">
+    <strong>Note on browser security:</strong> if you open this by double-clicking (a <span class="mono">file://</span> URL), most browsers still allow it to fetch public HTTPS APIs, but some lock this down. If a row shows <span class="mono">FETCH ERR</span>, either enter that value by hand, or serve the file over http/https instead (e.g. free static hosting on GitHub Pages, Netlify, or Vercel, or just run <span class="mono">python3 -m http.server</span> in this file's folder and open <span class="mono">http://localhost:8000</span>).
+  </div>
+
+  <div class="toolbar">
+    <button class="refresh-btn" id="refreshBtn">Fetch live data</button>
+    <span class="fetch-log" id="fetchLog">not yet fetched</span>
+  </div>
+
+  <div class="composite">
+    <div><div class="num mono" id="hitCount">0/15</div><div class="lbl">Signals hit</div></div>
+    <div><div class="num mono read" id="avgProg">0%</div><div class="lbl">Avg. progress</div></div>
+    <div><div class="num mono" id="structScore">0%</div><div class="lbl">Structural (long-cycle)</div></div>
+    <div><div class="num mono" id="pulseScore">0%</div><div class="lbl">Pulse (this-cycle)</div></div>
+  </div>
+
+  <div class="verdict" id="verdictText">Click "Fetch live data" to auto-fill the AUTO rows, then fill in the MANUAL rows yourself from the noted sources.</div>
+
+  <section class="category" data-cat="structural">
+    <div class="cat-head"><h2>Structural — long-cycle valuation</h2><span class="cat-note">the classic checklist</span></div>
+    <p class="cat-desc">Pi Cycle Top and Mayer Multiple are pure price-moving-average metrics, so they're computed live from free price history. MVRV Z-Score, NUPL, and RHODL Ratio need realized-cap on-chain data that has no free API (Glassnode's API has no free tier) — those stay manual, pulled from the free chart pages noted.</p>
+    <div id="rows-structural"></div>
+  </section>
+
+  <section class="category" data-cat="pulse">
+    <div class="cat-head"><h2>Pulse — leverage &amp; sentiment</h2><span class="cat-note">catches sharper, shorter tops</span></div>
+    <p class="cat-desc">Funding, open interest, long/short skew, and Fear &amp; Greed all come from free, no-key public endpoints (Binance futures API + Alternative.me).</p>
+    <div id="rows-pulse"></div>
+  </section>
+
+  <section class="category" data-cat="institutional">
+    <div class="cat-head"><h2>Institutional era</h2><span class="cat-note">didn't exist last cycle</span></div>
+    <p class="cat-desc">Stablecoin Supply Ratio is computable from free CoinGecko market-cap data. ETF flows, exchange netflow, and treasury pace have no official free API — nobody publishes one — so they stay manual.</p>
+    <div id="rows-institutional"></div>
+  </section>
+
+  <section class="category" data-cat="macro">
+    <div class="cat-head"><h2>Macro backdrop</h2><span class="cat-note">the tide underneath</span></div>
+    <p class="cat-desc">DXY and real yields live at FRED, which requires a free API key and doesn't allow direct browser calls (no CORS) — so these stay manual pulls from TradingView/FRED.</p>
+    <div id="rows-macro"></div>
+  </section>
+
+</main>
+
+<footer>
+  <p><strong>What's live vs. manual, and why:</strong> "auto" rows pull from CoinGecko, Binance's public futures API, and Alternative.me — all free, keyless, CORS-enabled endpoints. "Manual" rows are metrics that simply have no free public API today (Glassnode/CryptoQuant charge for API access even though their charts are free to view; ETF-flow and treasury-tracking sites don't publish an API at all). Values you type in are saved to this browser's local storage only — nothing leaves your machine except the API calls themselves.</p>
+  <p>Not financial advice — a tracking aid, not a signal generator.</p>
+  <button class="reset-btn" id="resetBtn" style="margin-top:8px;">Reset all values</button>
+</footer>
+
+<script>
+const STORE_KEY = 'cycle-ledger-live-v1';
+
+const DATA = {
+  structural: [
+    {id:'mvrv', name:'MVRV Z-Score', hint:'manual — lookintobitcoin.com', ref:7, dir:'above', source:'manual', explain:'Market value vs. realized value, standardized. No free API (needs Glassnode/CryptoQuant realized-cap data); read the free chart at lookintobitcoin.com.'},
+    {id:'pi', name:'Pi Cycle Top ratio', hint:'auto — 111DMA ÷ (2×350DMA)', ref:1, dir:'above', source:'auto', fetch:'pi', explain:'Fires when the 111-day MA crosses above 2× the 350-day MA. Computed live here from free CoinGecko daily price history — no specialized API needed.'},
+    {id:'mayer', name:'Mayer Multiple', hint:'auto — price ÷ 200DMA', ref:2.4, dir:'above', source:'auto', fetch:'mayer', explain:'Price divided by its 200-day moving average, computed from the same free price history.'},
+    {id:'puell', name:'Puell Multiple', hint:'auto — issuance value ÷ 365d avg', ref:4, dir:'above', source:'auto', fetch:'puell', explain:'Daily BTC issuance value ÷ its 365-day average. Estimated live from the public emission schedule (fixed block reward) × spot price — an approximation of the on-chain version, which weighs actual fees/found blocks too.'},
+    {id:'rhodl', name:'RHODL Ratio', hint:'manual — lookintobitcoin.com', ref:10000, dir:'above', source:'manual', explain:'Weights coin-days destroyed toward short-term vs long-term holders. Needs on-chain UTXO age data with no free API; read the free chart.'}
+  ],
+  pulse: [
+    {id:'funding', name:'Perp funding rate (annualized %)', hint:'auto — Binance BTCUSDT perp', ref:40, dir:'above', source:'auto', fetch:'funding', explain:'Sustained annualized funding above ~30-50% signals crowded, expensive long leverage. Pulled live from Binance\'s public futures API.'},
+    {id:'oi', name:'Open interest / market cap (%)', hint:'auto — Binance OI × price ÷ CoinGecko mcap', ref:3.5, dir:'above', source:'auto', fetch:'oi', explain:'Binance futures open interest (in BTC) converted to USD and divided by total BTC market cap. A partial proxy — total OI across all exchanges is higher, but Binance is consistently the largest venue.'},
+    {id:'fng', name:'Fear & Greed Index', hint:'auto — alternative.me', ref:85, dir:'above', source:'auto', fetch:'fng', explain:'Composite sentiment score, free and public from Alternative.me. Readings above 85 have preceded most sharp corrections this cycle.'},
+    {id:'lsr', name:'Long/Short ratio (top traders)', hint:'auto — Binance top-trader position ratio', ref:2.5, dir:'above', source:'auto', fetch:'lsr', explain:'Binance\'s published ratio of top-trader long vs short positioning.'},
+    {id:'liq', name:'24h liquidations ($M, est.)', hint:'manual — coinglass.com', ref:800, dir:'above', source:'manual', explain:'No free, reliable REST endpoint aggregates cross-exchange liquidations without a paid CoinGlass plan. Check coinglass.com\'s free liquidation page directly.'}
+  ],
+  institutional: [
+    {id:'etfflow', name:'ETF flow trend (5d, $M/day)', hint:'manual — farside.co.uk', ref:0, dir:'below', source:'manual', explain:'No official API; Farside Investors publishes the numbers on a page not built for scraping. Check it directly every few days.'},
+    {id:'ssr', name:'Stablecoin Supply Ratio', hint:'auto — CoinGecko BTC mcap ÷ stablecoin mcap', ref:15, dir:'below', source:'auto', fetch:'ssr', explain:'BTC market cap divided by the combined market cap of major USD stablecoins, both free from CoinGecko.'},
+    {id:'exnet', name:'Exchange netflow (30d, BTC)', hint:'manual — cryptoquant.com', ref:20000, dir:'above', source:'manual', explain:'Requires exchange wallet-clustering data that only paid on-chain platforms maintain.'},
+    {id:'treasury', name:'Corporate treasury pace (BTC/mo)', hint:'manual — bitcointreasuries.net', ref:0, dir:'below', source:'manual', explain:'No API; check the site\'s own dashboard periodically and note the trend.'}
+  ],
+  macro: [
+    {id:'dxy', name:'DXY trend (30d, %)', hint:'manual — tradingview.com', ref:2, dir:'above', source:'manual', explain:'FRED has this data free, but requires an API key and has no browser CORS support, so it can\'t be auto-fetched from a static page. Read it off TradingView.'},
+    {id:'realyield', name:'10Y real yield trend', hint:'manual — FRED (10Y TIPS, DFII10)', ref:0.3, dir:'above', source:'manual', explain:'Same FRED/CORS limitation as DXY above.'}
+  ]
+};
+
+let state = {};
+try { const s = localStorage.getItem(STORE_KEY); if (s) state = JSON.parse(s); } catch(e){ state = {}; }
+function save(){ try{ localStorage.setItem(STORE_KEY, JSON.stringify(state)); }catch(e){} }
+
+function computeStatus(item, current){
+  if (current === '' || current === null || current === undefined || isNaN(current)) return {status:'cold', progress:0};
+  const cur = parseFloat(current);
+  const ref = (item.userRef !== undefined && item.userRef !== '' && !isNaN(item.userRef)) ? parseFloat(item.userRef) : item.ref;
+  let progress;
+  if (item.dir === 'above') {
+    progress = ref === 0 ? (cur > 0 ? 100 : 0) : (cur/ref)*100;
+  } else {
+    progress = ref === 0 ? (cur < 0 ? Math.min(100, Math.abs(cur)*10) : 0) : ((ref-cur)/ref)*100;
+  }
+  progress = Math.max(0, Math.min(150, progress));
+  let status = 'cold';
+  if (progress >= 100) status = 'hit'; else if (progress >= 60) status = 'warm';
+  return {status, progress: Math.min(100, progress)};
+}
+
+function renderCategory(catKey, items){
+  const container = document.getElementById('rows-'+catKey);
+  container.innerHTML = '';
+  items.forEach(item=>{
+    const s = state[item.id] || {};
+    const row = document.createElement('div');
+    row.className='row';
+    row.innerHTML = `
+      <div class="name" data-id="${item.id}">${item.name}<span class="hint">${item.hint}</span></div>
+      <div class="tag ${item.source}">${item.source==='auto'?'auto':'man'}</div>
+      <label class="f1"><span class="field-label">Current</span><input type="number" step="any" inputmode="decimal" data-field="current" data-id="${item.id}" value="${s.current!==undefined?s.current:''}" placeholder="current"></label>
+      <label class="f2"><span class="field-label">Trigger</span><input type="number" step="any" inputmode="decimal" data-field="ref" data-id="${item.id}" value="${s.ref!==undefined?s.ref:item.ref}" placeholder="${item.ref}"></label>
+      <div class="status cold" data-status="${item.id}">—</div>
+      <div class="bar-wrap"><div class="bar" data-bar="${item.id}" style="width:0%"></div></div>
+      <div class="explain" data-explain="${item.id}">${item.explain}</div>
+    `;
+    container.appendChild(row);
+  });
+}
+
+function renderAll(){
+  renderCategory('structural', DATA.structural);
+  renderCategory('pulse', DATA.pulse);
+  renderCategory('institutional', DATA.institutional);
+  renderCategory('macro', DATA.macro);
+  attachHandlers();
+  recompute();
+}
+
+function attachHandlers(){
+  document.querySelectorAll('input[data-field]').forEach(inp=>{
+    inp.addEventListener('input', e=>{
+      const id=e.target.dataset.id, field=e.target.dataset.field;
+      if(!state[id]) state[id]={};
+      state[id][field]=e.target.value;
+      save();
+      recompute();
+    });
+  });
+  document.querySelectorAll('.name[data-id]').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      const exp = document.querySelector(`[data-explain="${el.dataset.id}"]`);
+      if(exp) exp.classList.toggle('open');
+    });
+  });
+  document.getElementById('resetBtn').addEventListener('click', ()=>{
+    if(confirm('Clear all entered values?')){ state={}; save(); renderAll(); }
+  });
+  document.getElementById('refreshBtn').addEventListener('click', fetchLiveData);
+}
+
+function setCurrent(id, value){
+  if(!state[id]) state[id]={};
+  state[id].current = value;
+  save();
+  const inp = document.querySelector(`input[data-field="current"][data-id="${id}"]`);
+  if(inp){ inp.value = value; inp.classList.add('auto-filled'); }
+}
+
+function markError(id){
+  const el = document.querySelector(`[data-status="${id}"]`);
+  if(el){ el.className='status err'; el.textContent='FETCH ERR'; }
+}
+
+async function fetchLiveData(){
+  const btn = document.getElementById('refreshBtn');
+  const log = document.getElementById('fetchLog');
+  btn.disabled = true;
+  log.textContent = 'fetching...';
+  const errors = [];
+
+  // 1. Price history from CoinGecko (used for Pi Cycle, Mayer, Puell)
+  let prices = null;
+  try {
+    const res = await fetch('https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=400&interval=daily');
+    const data = await res.json();
+    prices = data.prices.map(p => p[1]); // array of daily closes, oldest to newest
+  } catch(e){ errors.push('price history'); }
+
+  if (prices && prices.length > 350) {
+    const sma = (arr, n) => {
+      const slice = arr.slice(-n);
+      return slice.reduce((a,b)=>a+b,0) / slice.length;
+    };
+    try {
+      const ma111 = sma(prices, 111);
+      const ma350 = sma(prices, 350);
+      const piRatio = ma111 / (2*ma350);
+      setCurrent('pi', piRatio.toFixed(3));
+    } catch(e){ markError('pi'); }
+
+    try {
+      const ma200 = sma(prices, 200);
+      const lastPrice = prices[prices.length-1];
+      setCurrent('mayer', (lastPrice/ma200).toFixed(3));
+    } catch(e){ markError('mayer'); }
+
+    try {
+      // Puell approximation: fixed block reward (post-2024 halving = 3.125 BTC), ~144 blocks/day
+      const dailyIssuanceBTC = 3.125 * 144;
+      const dailyValues = prices.slice(-365).map(p => p * dailyIssuanceBTC);
+      const avg365 = dailyValues.reduce((a,b)=>a+b,0)/dailyValues.length;
+      const todayValue = prices[prices.length-1] * dailyIssuanceBTC;
+      setCurrent('puell', (todayValue/avg365).toFixed(3));
+    } catch(e){ markError('puell'); }
+  } else {
+    markError('pi'); markError('mayer'); markError('puell');
+  }
+
+  // 2. Market caps for SSR (BTC mcap / stablecoin mcap)
+  try {
+    const res = await fetch('https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&category=stablecoins&per_page=100&page=1');
+    const stables = await res.json();
+    const stableMcap = stables.reduce((sum, c) => sum + (c.market_cap||0), 0);
+    const btcRes = await fetch('https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=bitcoin');
+    const btcData = await btcRes.json();
+    const btcMcap = btcData[0].market_cap;
+    setCurrent('ssr', (btcMcap/stableMcap).toFixed(2));
+  } catch(e){ errors.push('stablecoin supply ratio'); markError('ssr'); }
+
+  // 3. Fear & Greed Index
+  try {
+    const res = await fetch('https://api.alternative.me/fng/?limit=1&format=json');
+    const data = await res.json();
+    setCurrent('fng', data.data[0].value);
+  } catch(e){ errors.push('fear & greed'); markError('fng'); }
+
+  // 4. Binance funding rate (current, annualized from 8h rate)
+  try {
+    const res = await fetch('https://fapi.binance.com/fapi/v1/premiumIndex?symbol=BTCUSDT');
+    const data = await res.json();
+    const rate8h = parseFloat(data.lastFundingRate);
+    const annualized = rate8h * 3 * 365 * 100; // 3 fundings/day
+    setCurrent('funding', annualized.toFixed(2));
+  } catch(e){ errors.push('funding rate'); markError('funding'); }
+
+  // 5. Open interest (Binance) as % of BTC market cap
+  try {
+    const oiRes = await fetch('https://fapi.binance.com/fapi/v1/openInterest?symbol=BTCUSDT');
+    const oiData = await oiRes.json();
+    const oiBTC = parseFloat(oiData.openInterest);
+    const priceRes = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd');
+    const priceData = await priceRes.json();
+    const price = priceData.bitcoin.usd;
+    const mcapRes = await fetch('https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=bitcoin');
+    const mcapData = await mcapRes.json();
+    const mcap = mcapData[0].market_cap;
+    const oiUSD = oiBTC * price;
+    setCurrent('oi', ((oiUSD/mcap)*100).toFixed(2));
+  } catch(e){ errors.push('open interest'); markError('oi'); }
+
+  // 6. Long/short ratio (top trader positions, Binance)
+  try {
+    const res = await fetch('https://fapi.binance.com/futures/data/topLongShortPositionRatio?symbol=BTCUSDT&period=1d&limit=1');
+    const data = await res.json();
+    setCurrent('lsr', parseFloat(data[0].longShortRatio).toFixed(2));
+  } catch(e){ errors.push('long/short ratio'); markError('lsr'); }
+
+  btn.disabled = false;
+  log.textContent = errors.length
+    ? `fetched with errors (blocked or renamed: ${errors.join(', ')}) — fill those in manually`
+    : `last fetched ${new Date().toLocaleTimeString()}`;
+  recompute();
+}
+
+function recompute(){
+  let hits=0, total=0, progressSum=0;
+  const structAcc={sum:0,count:0}, pulseAcc={sum:0,count:0}, instAcc={sum:0,count:0}, macroAcc={sum:0,count:0};
+
+  function scoreItem(item, acc){
+    const s = state[item.id] || {};
+    item.userRef = s.ref;
+    const {status, progress} = computeStatus(item, s.current);
+    const statusEl = document.querySelector(`[data-status="${item.id}"]`);
+    const barEl = document.querySelector(`[data-bar="${item.id}"]`);
+    if(statusEl && statusEl.textContent !== 'FETCH ERR'){
+      statusEl.className = 'status '+status;
+      statusEl.textContent = status==='hit' ? 'HIT' : status==='warm' ? 'WARM' : '—';
+    }
+    if(barEl) barEl.style.width = Math.max(2,progress)+'%';
+    total++; if(status==='hit') hits++;
+    progressSum += progress;
+    acc.sum += progress; acc.count++;
+  }
+
+  DATA.structural.forEach(i=>scoreItem(i, structAcc));
+  DATA.pulse.forEach(i=>scoreItem(i, pulseAcc));
+  DATA.institutional.forEach(i=>scoreItem(i, instAcc));
+  DATA.macro.forEach(i=>scoreItem(i, macroAcc));
+
+  document.getElementById('hitCount').textContent = `${hits}/${total}`;
+  document.getElementById('avgProg').textContent = (total?Math.round(progressSum/total):0)+'%';
+  const structPct = structAcc.count?Math.round(structAcc.sum/structAcc.count):0;
+  const pulsePct = (pulseAcc.count+instAcc.count+macroAcc.count) ? Math.round((pulseAcc.sum+instAcc.sum+macroAcc.sum)/(pulseAcc.count+instAcc.count+macroAcc.count)) : 0;
+  document.getElementById('structScore').textContent = structPct+'%';
+  document.getElementById('pulseScore').textContent = pulsePct+'%';
+
+  const verdict = document.getElementById('verdictText');
+  const anyEntered = [...DATA.structural,...DATA.pulse,...DATA.institutional,...DATA.macro].some(i=>state[i.id] && state[i.id].current!=='' && state[i.id].current!==undefined);
+  if(!anyEntered){
+    verdict.textContent = 'Click "Fetch live data" to auto-fill the AUTO rows, then fill in the MANUAL rows yourself from the noted sources.';
+  } else if (structPct>=70 && pulsePct>=70){
+    verdict.textContent = `Both structural and pulse readings are hot (${structPct}% / ${pulsePct}%) — the closest pattern to a historical cycle top.`;
+  } else if (pulsePct>=70 && structPct<50){
+    verdict.textContent = `Pulse is hot (${pulsePct}%) but structural valuation isn't (${structPct}%) — looks like a leverage-driven local top risk, not a full cycle top.`;
+  } else if (structPct>=70 && pulsePct<50){
+    verdict.textContent = `Structural valuation is stretched (${structPct}%) but leverage/sentiment hasn't caught up (${pulsePct}%) — a slower build that sometimes precedes blow-off phases.`;
+  } else {
+    verdict.textContent = `Neither structural (${structPct}%) nor pulse (${pulsePct}%) readings are near historical extremes — consistent with a mid-cycle read.`;
+  }
+}
+
+function tickClock(){
+  document.getElementById('clock').textContent = new Date().toLocaleDateString(undefined,{year:'numeric',month:'short',day:'numeric'});
+}
+tickClock();
+renderAll();
+</script>
+</body>
+</html>
